@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Context, Hono } from "hono";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -9,7 +9,57 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { toFetchResponse, toReqRes } from "fetch-to-node";
 
-const getServer = () => {
+
+// Define weather API response type
+interface WeatherApiResponse {
+  location: {
+    name: string;
+    region: string;
+    country: string;
+    lat: number;
+    lon: number;
+    tz_id: string;
+    localtime_epoch: number;
+    localtime: string;
+  };
+  current: {
+    last_updated_epoch: number;
+    last_updated: string;
+    temp_c: number;
+    temp_f: number;
+    is_day: number;
+    condition: {
+      text: string;
+      icon: string;
+      code: number;
+    };
+    wind_mph: number;
+    wind_kph: number;
+    wind_degree: number;
+    wind_dir: string;
+    pressure_mb: number;
+    pressure_in: number;
+    precip_mm: number;
+    precip_in: number;
+    humidity: number;
+    cloud: number;
+    feelslike_c: number;
+    feelslike_f: number;
+    windchill_c: number;
+    windchill_f: number;
+    heatindex_c: number;
+    heatindex_f: number;
+    dewpoint_c: number;
+    dewpoint_f: number;
+    vis_km: number;
+    vis_miles: number;
+    uv: number;
+    gust_mph: number;
+    gust_kph: number;
+  };
+}
+
+const getServer = (c: Context) => {
   // Create an MCP server with implementation details
   const server = new McpServer(
     {
@@ -37,6 +87,32 @@ const getServer = () => {
             },
           },
         ],
+      };
+    }
+  );
+
+  server.tool(
+    "fetch-weather",
+    { city: z.string() },
+    async ({ city }) => {
+      const response = await fetch(`https://api.weatherapi.com/v1/current.json?key=${c.env.WEATHER_API_KEY}&q=${city}&aqi=no`);
+      const data = await response.json() as WeatherApiResponse;
+      console.log(data);
+      console.log(c.env.WEATHER_API_KEY);
+      // Create a more detailed weather report
+      const weatherReport = `
+Weather for ${data.location.name}, ${data.location.country}:
+- Condition: ${data.current.condition.text}
+- Temperature: ${data.current.temp_c}°C (${data.current.temp_f}°F)
+- Feels like: ${data.current.feelslike_c}°C (${data.current.feelslike_f}°F)
+- Humidity: ${data.current.humidity}%
+- Wind: ${data.current.wind_kph} km/h, ${data.current.wind_dir}
+- Precipitation: ${data.current.precip_mm} mm
+- Local time: ${data.location.localtime}
+      `.trim();
+      
+      return {
+        content: [{ type: "text", text: weatherReport }]
       };
     }
   );
@@ -114,12 +190,12 @@ const getServer = () => {
   return server;
 };
 
-const app = new Hono();
+const app = new Hono<{ Bindings: { WEATHER_API_KEY: string } }>();
 
 app.post("/mcp", async (c) => {
   const { req, res } = toReqRes(c.req.raw);
 
-  const server = getServer();
+  const server = getServer(c);
 
   try {
     const transport: StreamableHTTPServerTransport =

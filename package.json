@@ -2,6 +2,7 @@
   "name": "mcp-hono-stateless",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
@@ -10,6 +11,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.15.2",
+    "esbuild": "^0.25.3",
     "typescript": "^5.5.2",
     "wrangler": "^4.13.2"
   },
